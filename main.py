@@ -1,7 +1,12 @@
 """Augment just so so"""
 
-import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext
+try:
+    import tkinter as tk
+    from tkinter import ttk, messagebox, scrolledtext
+except ImportError:
+    print("错误：缺少tkinter模块。请安装完整的Python版本。")
+    import sys
+    sys.exit(1)
 import platform
 import ctypes
 import os
@@ -348,7 +353,7 @@ class TempMailClient:
 
     def _generate_1secmail(self):
         """使用1secmail API生成邮箱"""
-        api = self.EMAIL_APIS[0]
+        api = self.EMAIL_APIS[1]  # TempMail配置（1SecMail）
 
         # 获取可用域名
         try:
