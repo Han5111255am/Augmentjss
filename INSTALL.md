@@ -29,8 +29,8 @@
 
 1. **克隆仓库**
    ```bash
-   git clone https://github.com/your-username/AugmentJSS.git
-   cd AugmentJSS
+   git clone https://github.com/Han5111255am/Augmentjss.git
+   cd Augmentjss
    ```
 
 2. **创建虚拟环境**（推荐）
@@ -48,39 +48,6 @@
    ```bash
    python main.py
    ```
-
-## 🔧 自行打包
-
-如果您想自己打包可执行文件：
-
-### 环境准备
-确保您的Python环境包含完整的tkinter模块：
-
-```bash
-# 测试tkinter是否可用
-python -c "import tkinter; print('tkinter可用')"
-```
-
-### 打包步骤
-
-1. **安装打包工具**
-   ```bash
-   pip install pyinstaller
-   ```
-
-2. **执行打包**
-   ```bash
-   pyinstaller --onefile --windowed --name AugmentJSS --add-data "augmentjss-windows-x86_64.exe;." main.py
-   ```
-
-3. **查看结果**
-   - 打包完成后，可执行文件位于 `dist/AugmentJSS.exe`
-
-### 打包注意事项
-
-- **tkinter问题**: 如果遇到tkinter相关错误，请使用包含完整tkinter的Python环境
-- **文件大小**: 打包后的文件约50-60MB，这是正常的
-- **杀毒软件**: 某些杀毒软件可能误报，请添加到白名单
 
 ## 🛠️ 故障排除
 
@@ -122,8 +89,6 @@ python -c "import tkinter; print('tkinter可用')"
 #### 支持的系统
 - ✅ Windows 10 (64位)
 - ✅ Windows 11 (64位)
-- ❌ Windows 7/8 (未测试)
-- ❌ 32位系统 (不支持)
 
 #### 最低配置要求
 - **CPU**: 任何64位处理器
