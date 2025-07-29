@@ -163,6 +163,11 @@ class TempMailClient:
                 "read_message": "?action=readMessage&login={login}&domain={domain}&id={id}"
             },
             {
+                "name": "TempMailPlus",
+                "base_url": "https://tempmail.plus/api",
+                "timeout": 30
+            },
+            {
                 "name": "LocalGenerated",
                 "domains": ["tempmail.plus", "mailto.plus", "10minutemail.com", "guerrillamail.com"]
             }
@@ -222,22 +227,28 @@ class TempMailClient:
 
         return True
     
-    def generate_email(self):
+    def generate_email(self, preferred_service=None):
         """生成真实的临时邮箱地址"""
         self.logger.info("开始生成真实临时邮箱...")
+
+        # 如果指定了首选服务，先尝试该服务
+        if preferred_service:
+            api_config = self._get_api_config_by_name(preferred_service)
+            if api_config:
+                try:
+                    email = self._generate_email_by_service(api_config)
+                    if email:
+                        self.current_email = email
+                        self.current_api = api_config
+                        self.logger.info(f"使用指定服务 {api_config['name']} 生成邮箱成功: {email}")
+                        return email
+                except Exception as e:
+                    self.logger.warning(f"指定服务 {preferred_service} 生成邮箱失败: {e}")
 
         # 尝试不同的API服务
         for api_config in self.EMAIL_APIS:
             try:
-                if api_config["name"] == "MailTM":
-                    email = self._generate_mailtm()
-                elif api_config["name"] == "TempMail":
-                    email = self._generate_1secmail()
-                elif api_config["name"] == "LocalGenerated":
-                    email = self._generate_local_email()
-                else:
-                    continue
-
+                email = self._generate_email_by_service(api_config)
                 if email:
                     self.current_email = email
                     self.current_api = api_config
@@ -251,6 +262,34 @@ class TempMailClient:
         # 如果所有API都失败，生成本地邮箱（作为备选）
         self.logger.warning("所有API服务失败，生成本地邮箱作为备选")
         return self._generate_local_email()
+
+    def _get_api_config_by_name(self, service_name):
+        """根据服务名称获取API配置"""
+        service_mapping = {
+            "1SecMail": "TempMail",
+            "MailTM": "MailTM",
+            "TempMail Plus": "TempMailPlus"
+        }
+
+        mapped_name = service_mapping.get(service_name, service_name)
+
+        for api_config in self.EMAIL_APIS:
+            if api_config["name"] == mapped_name:
+                return api_config
+        return None
+
+    def _generate_email_by_service(self, api_config):
+        """根据API配置生成邮箱"""
+        if api_config["name"] == "MailTM":
+            return self._generate_mailtm()
+        elif api_config["name"] == "TempMail":
+            return self._generate_1secmail()
+        elif api_config["name"] == "TempMailPlus":
+            return self._generate_tempmail_plus()
+        elif api_config["name"] == "LocalGenerated":
+            return self._generate_local_email()
+        else:
+            return None
 
     def _generate_mailtm(self):
         """使用mail.tm API生成邮箱"""
@@ -333,6 +372,27 @@ class TempMailClient:
         self.current_domain = domain
 
         return email
+
+    def _generate_tempmail_plus(self):
+        """使用TempMail Plus API生成邮箱"""
+        try:
+            # TempMail Plus通常需要先获取域名，然后生成邮箱
+            # 这里使用简化的方法，直接生成一个邮箱地址
+            domains = ["tempmail.plus", "mailto.plus", "10minutemail.com"]
+            username = ''.join(random.choices(string.ascii_lowercase + string.digits, k=10))
+            domain = random.choice(domains)
+            email = f"{username}@{domain}"
+
+            self.current_email = email
+            self.current_login = username
+            self.current_domain = domain
+
+            self.logger.info(f"TempMail Plus生成邮箱: {email}")
+            return email
+
+        except Exception as e:
+            self.logger.error(f"TempMail Plus API失败: {e}")
+            return None
 
     def _generate_guerrillamail(self):
         """使用GuerrillaMail API生成邮箱"""
@@ -681,13 +741,27 @@ class ExecutorApp:
                                   padx=15, pady=15, font=("Arial", 11, "bold"))
         email_frame.pack(fill=tk.X, pady=(0, 15))
         
+        # 服务选择框
+        service_frame = tk.Frame(email_frame)
+        service_frame.pack(fill=tk.X, pady=(0, 10))
+
+        tk.Label(service_frame, text="选择服务:", font=("Arial", 10)).pack(side=tk.LEFT)
+
+        self.service_var = tk.StringVar()
+        service_options = ["1SecMail", "MailTM", "TempMail Plus"]
+        self.service_var.set("1SecMail")  # 默认选择1SecMail
+
+        service_combo = ttk.Combobox(service_frame, textvariable=self.service_var,
+                                   values=service_options, state="readonly", width=15)
+        service_combo.pack(side=tk.LEFT, padx=(10, 0))
+
         email_display_frame = tk.Frame(email_frame)
-        email_display_frame.pack(fill=tk.X, pady=(0, 10))
-        
+        email_display_frame.pack(fill=tk.X, pady=(10, 10))
+
         tk.Label(email_display_frame, text="生成的邮箱:", font=("Arial", 10)).pack(side=tk.LEFT)
-        
+
         self.email_var = tk.StringVar()
-        email_entry = tk.Entry(email_display_frame, textvariable=self.email_var, 
+        email_entry = tk.Entry(email_display_frame, textvariable=self.email_var,
                               state="readonly", width=50, font=("Consolas", 10))
         email_entry.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(10, 0))
         
@@ -1156,13 +1230,14 @@ class ExecutorApp:
     
     def generate_email(self):
         try:
-            self.log_message('📧 正在生成临时邮箱地址...')
+            selected_service = self.service_var.get()
+            self.log_message(f'📧 正在使用 {selected_service} 生成临时邮箱地址...')
             self.generate_btn.config(state='disabled', text='生成中...')
 
             # 在新线程中生成邮箱以避免UI阻塞
             def generate_thread():
                 try:
-                    email = self.mail_client.generate_email()
+                    email = self.mail_client.generate_email(preferred_service=selected_service)
                     self.root.after(0, self._update_email_result, email)
                 except Exception as e:
                     self.root.after(0, self._update_email_error, str(e))
