@@ -32,11 +32,9 @@ jobs:
         
     - name: Build executable
       run: |
-        pyinstaller --onefile --windowed --name AugmentJSS --add-data "augmentjss-windows-x86_64.exe;." main.py
-        
-    - name: Prepare release files
-      run: |
-        python scripts/prepare_release.py
+        pyinstaller --onefile --windowed --name AugmentJSS main.py
+        New-Item -ItemType Directory -Force -Path release\binary
+        Copy-Item dist\AugmentJSS.exe release\binary\AugmentJSS-${{ github.ref_name }}-windows-x64.exe
         
     - name: Get version
       id: get_version
@@ -56,7 +54,27 @@ jobs:
       with:
         tag_name: ${{ steps.get_version.outputs.version }}
         release_name: AugmentJSS ${{ steps.get_version.outputs.version }}
-        body_path: release/RELEASE_NOTES.md
+        body: |
+          ## 🎯 AugmentJSS ${{ steps.get_version.outputs.version }} - 优化版本
+
+          ### ✨ 主要改进
+          - 优化项目文档结构，移除冗余内容
+          - 简化安装和使用说明
+          - 清理项目文件，保持仓库整洁
+          - 重新打包优化可执行文件
+
+          ### 📥 下载
+          - **Windows 64位**: 下载 `AugmentJSS.exe` 直接运行
+          - **源代码**: 下载源码包自行编译
+
+          ### 🚀 功能特性
+          - 📧 临时邮箱生成
+          - 📬 验证码自动获取
+          - 🔧 机器码重置功能
+
+          ### 📋 系统要求
+          - Windows 10/11 (64位)
+          - 管理员权限（机器码重置功能）
         draft: false
         prerelease: false
         
@@ -70,22 +88,4 @@ jobs:
         asset_name: AugmentJSS-${{ steps.get_version.outputs.version }}-windows-x64.exe
         asset_content_type: application/octet-stream
         
-    - name: Upload source code
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: release/source/AugmentJSS-${{ steps.get_version.outputs.version }}-source.zip
-        asset_name: AugmentJSS-${{ steps.get_version.outputs.version }}-source.zip
-        asset_content_type: application/zip
-        
-    - name: Upload checksums
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: release/SHA256SUMS.txt
-        asset_name: SHA256SUMS.txt
-        asset_content_type: text/plain
+
