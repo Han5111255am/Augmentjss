@@ -11,6 +11,9 @@ on:
         required: true
         default: 'v1.0.0'
 
+permissions:
+  contents: write
+
 jobs:
   build-and-release:
     runs-on: windows-latest
@@ -47,13 +50,10 @@ jobs:
         echo "version=$version" >> $env:GITHUB_OUTPUT
         
     - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ steps.get_version.outputs.version }}
-        release_name: AugmentJSS ${{ steps.get_version.outputs.version }}
+        name: AugmentJSS ${{ steps.get_version.outputs.version }}
         body: |
           ## 🎯 AugmentJSS ${{ steps.get_version.outputs.version }} - 优化版本
 
@@ -75,17 +75,9 @@ jobs:
           ### 📋 系统要求
           - Windows 10/11 (64位)
           - 管理员权限（机器码重置功能）
+        files: |
+          release/binary/AugmentJSS-${{ steps.get_version.outputs.version }}-windows-x64.exe
         draft: false
         prerelease: false
-        
-    - name: Upload executable
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: release/binary/AugmentJSS-${{ steps.get_version.outputs.version }}-windows-x64.exe
-        asset_name: AugmentJSS-${{ steps.get_version.outputs.version }}-windows-x64.exe
-        asset_content_type: application/octet-stream
         
 
