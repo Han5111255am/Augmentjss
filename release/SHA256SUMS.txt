@@ -1,0 +1,5 @@
+# SHA256 校验和
+# 生成时间: 2025-07-29 16:34:41
+
+b3031c19645c9fecb9de4ce432d9c22f740ad086dd72fe1f1591817d97ba31f1  AugmentJSS-v1.0.0-windows-x64.exe
+f047211a4774169db6713ad88aa7f34b06ceeaa97750585de9923f5f289069c8  AugmentJSS-v1.0.0-source.zip
