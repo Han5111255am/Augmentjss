@@ -2,7 +2,7 @@
 
 一个功能强大的多合一工具，集成了临时邮箱生成、验证码获取和机器码重置功能。
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.1.1-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows%2064bit-lightgrey.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Python](https://img.shields.io/badge/python-3.10+-blue.svg)

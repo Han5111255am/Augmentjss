@@ -31,7 +31,7 @@ import random
 import string
 import logging
 VERSION_CONFIG = {
-    "current_version": "1.0.0",
+    "current_version": "1.1.1",
     "update_check": {
         "enabled": True,
         "test_mode": False,
@@ -247,10 +247,16 @@ class TempMailClient:
                         self.current_api = api_config
                         self.logger.info(f"使用指定服务 {api_config['name']} 生成邮箱成功: {email}")
                         return email
+                    else:
+                        self.logger.warning(f"指定服务 {preferred_service} 生成邮箱失败: 返回空邮箱")
+                        # 如果用户明确选择了服务但失败，尝试该服务的备用方法
+                        return self._generate_fallback_email(preferred_service)
                 except Exception as e:
                     self.logger.warning(f"指定服务 {preferred_service} 生成邮箱失败: {e}")
+                    # 如果用户明确选择了服务但失败，尝试该服务的备用方法
+                    return self._generate_fallback_email(preferred_service)
 
-        # 尝试不同的API服务
+        # 如果没有指定服务，尝试不同的API服务
         for api_config in self.EMAIL_APIS:
             try:
                 email = self._generate_email_by_service(api_config)
@@ -267,6 +273,33 @@ class TempMailClient:
         # 如果所有API都失败，生成本地邮箱（作为备选）
         self.logger.warning("所有API服务失败，生成本地邮箱作为备选")
         return self._generate_local_email()
+
+    def _generate_fallback_email(self, service_name):
+        """为指定服务生成备用邮箱"""
+        if service_name == "MailTM":
+            # MailTM备用：生成mail.tm域名的本地邮箱
+            username = ''.join(random.choices(string.ascii_lowercase + string.digits, k=10))
+            email = f"{username}@mail.tm"
+            self.current_email = email
+            self.current_login = username
+            self.current_domain = "mail.tm"
+            self.logger.info(f"使用MailTM备用方法生成邮箱: {email}")
+            return email
+        elif service_name == "1SecMail":
+            # 1SecMail备用：生成1secmail.com域名的本地邮箱
+            username = ''.join(random.choices(string.ascii_lowercase + string.digits, k=10))
+            email = f"{username}@1secmail.com"
+            self.current_email = email
+            self.current_login = username
+            self.current_domain = "1secmail.com"
+            self.logger.info(f"使用1SecMail备用方法生成邮箱: {email}")
+            return email
+        elif service_name == "TempMail Plus":
+            # TempMail Plus备用：使用本地生成
+            return self._generate_tempmail_plus()
+        else:
+            # 其他情况使用通用本地生成
+            return self._generate_local_email()
 
     def _get_api_config_by_name(self, service_name):
         """根据服务名称获取API配置"""
@@ -841,6 +874,7 @@ class ExecutorApp:
                                                 height=15, font=("Consolas", 9))
         self.log_text.pack(fill=tk.BOTH, expand=True)
         
+        self.log_message("⚠️ 重要提示：重置机器码功能需要用管理员身份运行打开")
         self.log_message("🚀 Augment just so so 启动成功")
         self.log_message(f"📦 当前版本: {self.version_checker.get_current_version()}")
         self.log_message(f"💻 系统信息: {self.system_display}")
