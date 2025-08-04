@@ -143,10 +143,18 @@ class TempMailClient:
         self.CODE_PATTERNS = {
             "standard": r"(?<![a-zA-Z@.])\b\d{4,8}\b",
             "spaced": r"\b\d\s*\d\s*\d\s*\d\s*\d\s*\d\b",
-            "prefixed": r"(?:验证码|code|码|号码|编号|verification|verify)[^\d]*(\d{4,8})",
+            "prefixed": r"(?:验证码|code|码|号码|编号|verification|verify|验证|确认码|动态码|安全码)[^\d]*(\d{4,8})",
             "html_code": r"<[^>]*>(\d{4,8})<[^>]*>",
             "chinese": r"您的验证码[是为：]*\s*(\d{4,8})",
-            "english": r"(?:your|verification|confirm)\s*(?:code|number)[:\s]*(\d{4,8})"
+            "english": r"(?:your|verification|confirm|security|authentication|otp|pin)\s*(?:code|number|pin)[:\s]*(\d{4,8})",
+            "brackets": r"[\[\(](\d{4,8})[\]\)]",
+            "colon_space": r"[:：]\s*(\d{4,8})",
+            "bold_code": r"<b[^>]*>(\d{4,8})</b>",
+            "strong_code": r"<strong[^>]*>(\d{4,8})</strong>",
+            "span_code": r"<span[^>]*>(\d{4,8})</span>",
+            "div_code": r"<div[^>]*>(\d{4,8})</div>",
+            "td_code": r"<td[^>]*>(\d{4,8})</td>",
+            "p_code": r"<p[^>]*>(\d{4,8})</p>"
         }
 
         # 多个临时邮箱API服务配置
@@ -214,22 +222,17 @@ class TempMailClient:
 
         # 验证码长度通常为4-8位
         if len(cleaned_code) < 4 or len(cleaned_code) > 8:
+            self.logger.info(f"验证码长度不符合要求: {len(cleaned_code)} 位")
             return False
 
-        # 检查是否全是相同数字（如111111）
-        if len(set(cleaned_code)) == 1:
+        # 只检查是否全为数字
+        if not cleaned_code.isdigit():
+            self.logger.info(f"验证码包含非数字字符: {cleaned_code}")
             return False
 
-        # 检查是否是连续数字（如123456）
-        if len(cleaned_code) >= 4:
-            is_sequential = True
-            for i in range(1, len(cleaned_code)):
-                if int(cleaned_code[i]) != int(cleaned_code[i-1]) + 1:
-                    is_sequential = False
-                    break
-            if is_sequential:
-                return False
-
+        # 放宽验证条件，允许连续数字和重复数字
+        # 因为很多真实的验证码就是这样的格式
+        self.logger.info(f"验证码验证通过: {cleaned_code}")
         return True
     
     def generate_email(self, preferred_service=None):
@@ -334,23 +337,46 @@ class TempMailClient:
         api = self.EMAIL_APIS[0]  # MailTM配置
 
         try:
+            self.logger.info("开始使用MailTM API生成邮箱...")
+
             # 获取可用域名
             domains_url = api["base_url"] + api["domains_endpoint"]
-            response = self.session.get(domains_url, timeout=10)
+            self.logger.info(f"请求域名列表: {domains_url}")
+
+            response = self.session.get(domains_url, timeout=15)
+            self.logger.info(f"域名请求响应状态码: {response.status_code}")
+
+            # 添加延迟避免429错误（每秒最多8个请求）
+            time.sleep(0.2)
 
             if response.status_code == 200:
-                domains = response.json()
+                domains_data = response.json()
+                self.logger.info(f"获取到域名数据: {domains_data}")
+
+                # MailTM API返回的是包含hydra:member的对象
+                if isinstance(domains_data, dict) and 'hydra:member' in domains_data:
+                    domains = domains_data['hydra:member']
+                elif isinstance(domains_data, list):
+                    domains = domains_data
+                else:
+                    domains = []
+
                 if domains and len(domains) > 0:
                     domain = domains[0]['domain']
+                    self.logger.info(f"选择域名: {domain}")
                 else:
                     domain = 'mail.tm'
+                    self.logger.warning("未获取到域名，使用默认域名: mail.tm")
             else:
                 domain = 'mail.tm'
+                self.logger.warning(f"获取域名失败，状态码: {response.status_code}，使用默认域名: mail.tm")
 
             # 生成随机用户名和密码
             username = ''.join(random.choices(string.ascii_lowercase + string.digits, k=10))
             email = f"{username}@{domain}"
             password = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
+
+            self.logger.info(f"生成邮箱地址: {email}")
 
             # 创建账户
             account_data = {
@@ -359,12 +385,26 @@ class TempMailClient:
             }
 
             accounts_url = api["base_url"] + api["accounts_endpoint"]
-            create_response = self.session.post(accounts_url, json=account_data, timeout=10)
+            self.logger.info(f"创建账户请求: {accounts_url}")
+
+            # 添加延迟避免429错误
+            time.sleep(0.2)
+
+            create_response = self.session.post(accounts_url, json=account_data, timeout=15)
+            self.logger.info(f"创建账户响应状态码: {create_response.status_code}")
+            self.logger.info(f"创建账户响应内容: {create_response.text}")
 
             if create_response.status_code == 201:
                 # 登录获取token
                 token_url = api["base_url"] + api["token_endpoint"]
-                login_response = self.session.post(token_url, json=account_data, timeout=10)
+                self.logger.info(f"登录请求: {token_url}")
+
+                # 添加延迟避免429错误
+                time.sleep(0.2)
+
+                login_response = self.session.post(token_url, json=account_data, timeout=15)
+                self.logger.info(f"登录响应状态码: {login_response.status_code}")
+                self.logger.info(f"登录响应内容: {login_response.text}")
 
                 if login_response.status_code == 200:
                     token_data = login_response.json()
@@ -377,10 +417,17 @@ class TempMailClient:
                     self.session.headers['Authorization'] = f'Bearer {self.current_token}'
 
                     self.logger.info(f"mail.tm邮箱创建成功: {email}")
+                    self.logger.info(f"获取到token: {self.current_token[:20]}...")
                     return email
+                else:
+                    self.logger.error(f"登录失败，状态码: {login_response.status_code}")
+            else:
+                self.logger.error(f"创建账户失败，状态码: {create_response.status_code}")
 
         except Exception as e:
             self.logger.error(f"mail.tm API失败: {e}")
+            import traceback
+            self.logger.error(f"详细错误: {traceback.format_exc()}")
 
         return None
 
@@ -454,7 +501,12 @@ class TempMailClient:
 
     def _generate_local_email(self):
         """生成本地邮箱作为备选"""
-        domains = ["tempmail.plus", "mailto.plus", "1secmail.com"]
+        domains = [
+            "tempmail.plus", "mailto.plus", "1secmail.com", "1secmail.org", "1secmail.net",
+            "10minutemail.com", "guerrillamail.com", "guerrillamail.net", "guerrillamail.org",
+            "sharklasers.com", "grr.la", "guerrillamailblock.com", "pokemail.net",
+            "spam4.me", "bccto.me", "chacuo.net", "027168.com", "linshiyouxiang.net"
+        ]
         username = ''.join(random.choices(string.ascii_lowercase + string.digits, k=12))
         domain = random.choice(domains)
 
@@ -462,6 +514,7 @@ class TempMailClient:
         self.current_login = username
         self.current_domain = domain
 
+        self.logger.info(f"生成本地邮箱: {email} (域名: {domain})")
         return email
     
     def _extract_code_from_message(self, message):
@@ -473,17 +526,21 @@ class TempMailClient:
             if isinstance(message, dict):
                 # mail.tm格式
                 if 'text' in message:
-                    text_content += message['text']
+                    text_content += str(message['text'])
                 if 'html' in message:
-                    text_content += message['html']
+                    html_content = message['html']
+                    if isinstance(html_content, list):
+                        text_content += ' '.join(html_content)
+                    else:
+                        text_content += str(html_content)
                 if 'subject' in message:
-                    text_content += message['subject']
+                    text_content += ' ' + str(message['subject'])
 
                 # 1secmail格式
                 if 'textBody' in message:
-                    text_content += message['textBody']
+                    text_content += str(message['textBody'])
                 if 'htmlBody' in message:
-                    text_content += message['htmlBody']
+                    text_content += str(message['htmlBody'])
             else:
                 text_content = str(message)
 
@@ -504,52 +561,72 @@ class TempMailClient:
 
         self.logger.info(f"开始提取验证码，邮件长度: {len(mail_text)}")
 
-        # 清理HTML标签
+        # 打印邮件内容的前200个字符用于调试
+        preview = mail_text[:200].replace('\n', ' ').replace('\r', ' ')
+        self.logger.info(f"邮件内容预览: {preview}...")
+
+        # 清理HTML标签，但保留一些结构
         import re
         clean_text = re.sub(r'<[^>]+>', ' ', mail_text)
 
+        # 同时在原始文本和清理后的文本中搜索
+        search_texts = [mail_text, clean_text]
+
         patterns = self._compile_patterns()
 
-        # 按优先级尝试不同的模式
-        pattern_priority = ["prefixed", "chinese", "english", "standard", "html_code", "spaced"]
+        # 扩展优先级列表，包含新的模式
+        pattern_priority = [
+            "prefixed", "chinese", "english", "brackets", "colon_space",
+            "bold_code", "strong_code", "span_code", "div_code", "td_code", "p_code",
+            "html_code", "standard", "spaced"
+        ]
 
-        for pattern_name in pattern_priority:
-            if pattern_name in patterns:
-                pattern = patterns[pattern_name]
-                matches = pattern.findall(clean_text)
+        for search_text in search_texts:
+            for pattern_name in pattern_priority:
+                if pattern_name in patterns:
+                    pattern = patterns[pattern_name]
+                    matches = pattern.findall(search_text)
 
-                if matches:
-                    for match in matches:
-                        code = match if isinstance(match, str) else match[0]
-                        cleaned_code = self._clean_verification_code(code)
+                    if matches:
+                        self.logger.info(f"模式 {pattern_name} 找到 {len(matches)} 个匹配")
+                        for i, match in enumerate(matches):
+                            code = match if isinstance(match, str) else match[0] if isinstance(match, tuple) else str(match)
+                            cleaned_code = self._clean_verification_code(code)
 
-                        if self._validate_code(cleaned_code):
-                            self.logger.info(f"使用模式 {pattern_name} 提取到验证码: {cleaned_code}")
-                            return cleaned_code
+                            self.logger.info(f"匹配 {i+1}: 原始='{match}', 清理后='{cleaned_code}'")
 
-        # 如果没有找到，尝试在原始HTML中查找
-        html_matches = re.findall(r'\b\d{4,8}\b', mail_text)
-        for match in html_matches:
+                            if self._validate_code(cleaned_code):
+                                self.logger.info(f"使用模式 {pattern_name} 提取到验证码: {cleaned_code}")
+                                return cleaned_code
+
+        # 最后尝试所有数字组合
+        all_numbers = re.findall(r'\d{4,8}', mail_text)
+        self.logger.info(f"找到所有数字组合: {all_numbers}")
+
+        for match in all_numbers:
             if self._validate_code(match):
-                self.logger.info(f"在HTML中找到验证码: {match}")
+                self.logger.info(f"从所有数字中找到验证码: {match}")
                 return match
 
         self.logger.warning("未能提取到有效验证码")
+        self.logger.info("建议手动检查邮件内容或联系发送方确认验证码格式")
         return None
     
-    def get_verification_code(self, max_retries=5, retry_interval=5):
+    def get_verification_code(self, max_retries=8, retry_interval=8):
         """获取真实的验证码"""
         if not self.current_email or not self.current_login or not self.current_domain:
             self.logger.error("邮箱信息不完整，无法获取验证码")
             return None
 
         self.logger.info(f"开始获取验证码，监控邮箱: {self.current_email}")
+        self.logger.info(f"使用API服务: {self.current_api['name'] if self.current_api else '未知'}")
 
         for attempt in range(max_retries):
             try:
                 self.logger.info(f"第 {attempt + 1}/{max_retries} 次尝试获取验证码")
 
                 if attempt > 0:  # 第一次不等待
+                    self.logger.info(f"等待 {retry_interval} 秒后重试...")
                     time.sleep(retry_interval)
 
                 # 根据当前使用的API获取邮件
@@ -559,18 +636,33 @@ class TempMailClient:
                     self.logger.info(f"找到 {len(messages)} 封邮件")
 
                     # 检查每封邮件中的验证码
-                    for message in messages:
+                    for i, message in enumerate(messages):
+                        self.logger.info(f"检查第 {i+1} 封邮件...")
+
+                        # 打印邮件内容用于调试
+                        if isinstance(message, dict):
+                            if 'subject' in message:
+                                self.logger.info(f"邮件主题: {message.get('subject', '无主题')}")
+                            if 'from' in message:
+                                self.logger.info(f"发件人: {message.get('from', '未知')}")
+
                         code = self._extract_code_from_message(message)
                         if code:
                             self.logger.info(f"验证码获取成功: {code}")
                             return code
+                        else:
+                            self.logger.info(f"第 {i+1} 封邮件中未找到验证码")
                 else:
                     self.logger.info("暂无新邮件")
 
             except Exception as e:
                 self.logger.error(f"获取验证码失败: {e}")
+                # 增加更详细的错误信息
+                import traceback
+                self.logger.error(f"详细错误: {traceback.format_exc()}")
 
         self.logger.error("达到最大重试次数，获取验证码失败")
+        self.logger.info("建议检查：1. 邮件是否已发送 2. 邮箱服务是否正常 3. 验证码格式是否特殊")
         return None
 
     def _get_messages(self):
@@ -594,31 +686,58 @@ class TempMailClient:
     def _get_mailtm_messages(self):
         """获取mail.tm邮件"""
         if not self.current_token:
+            self.logger.error("没有token，无法获取邮件")
             return []
 
         try:
             api = self.current_api
             messages_url = api["base_url"] + api["messages_endpoint"]
 
+            self.logger.info(f"请求邮件列表: {messages_url}")
+            self.logger.info(f"使用token: {self.current_token[:20]}...")
+
             response = self.session.get(messages_url, timeout=10)
+            self.logger.info(f"邮件列表响应状态码: {response.status_code}")
+
             if response.status_code == 200:
                 data = response.json()
-                messages = data.get('hydra:member', [])
+                self.logger.info(f"邮件列表响应数据类型: {type(data)}")
+                self.logger.info(f"邮件列表响应数据: {data}")
+
+                # MailTM API直接返回数组，不是包含hydra:member的对象
+                if isinstance(data, list):
+                    messages = data
+                elif isinstance(data, dict):
+                    messages = data.get('hydra:member', data.get('member', []))
+                else:
+                    messages = []
+
+                self.logger.info(f"解析到 {len(messages)} 封邮件")
 
                 # 获取邮件详细内容
                 detailed_messages = []
-                for msg in messages:
+                for i, msg in enumerate(messages):
                     message_id = msg.get('id')
                     if message_id:
+                        self.logger.info(f"获取第 {i+1} 封邮件详情，ID: {message_id}")
                         detail_url = f"{messages_url}/{message_id}"
                         detail_response = self.session.get(detail_url, timeout=10)
+
                         if detail_response.status_code == 200:
-                            detailed_messages.append(detail_response.json())
+                            detail_data = detail_response.json()
+                            self.logger.info(f"邮件详情: {detail_data}")
+                            detailed_messages.append(detail_data)
+                        else:
+                            self.logger.warning(f"获取邮件详情失败，状态码: {detail_response.status_code}")
 
                 return detailed_messages
+            else:
+                self.logger.error(f"获取邮件列表失败，状态码: {response.status_code}, 响应: {response.text}")
 
         except Exception as e:
             self.logger.error(f"获取mail.tm邮件失败: {e}")
+            import traceback
+            self.logger.error(f"详细错误: {traceback.format_exc()}")
 
         return []
 
@@ -786,8 +905,8 @@ class ExecutorApp:
         tk.Label(service_frame, text="选择服务:", font=("Arial", 10)).pack(side=tk.LEFT)
 
         self.service_var = tk.StringVar()
-        service_options = ["1SecMail", "MailTM", "TempMail Plus"]
-        self.service_var.set("1SecMail")  # 默认选择1SecMail
+        service_options = ["MailTM", "1SecMail", "TempMail Plus"]
+        self.service_var.set("MailTM")  # 默认选择MailTM
 
         service_combo = ttk.Combobox(service_frame, textvariable=self.service_var,
                                    values=service_options, state="readonly", width=15)
@@ -1366,7 +1485,7 @@ class ExecutorApp:
             self.root.after(0, self.log_message, '⏳ 等待邮件到达，这可能需要几秒钟...')
 
             # 增加重试次数和间隔时间，因为真实邮件需要时间
-            code = self.mail_client.get_verification_code(max_retries=5, retry_interval=5)
+            code = self.mail_client.get_verification_code(max_retries=8, retry_interval=8)
             self.root.after(0, self._update_code_result, code)
         except Exception as e:
             self.root.after(0, self._update_code_error, str(e))
