@@ -31,7 +31,7 @@ import random
 import string
 import logging
 VERSION_CONFIG = {
-    "current_version": "1.1.1",
+    "current_version": "1.1.2",
     "update_check": {
         "enabled": True,
         "test_mode": False,
